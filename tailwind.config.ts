@@ -14,8 +14,9 @@ const config: Config = {
           "100%": { transform: "scale(1) rotate(0deg)",   opacity: "1" },
         },
         popOut: {
-          "0%":   { transform: "scale(1)",   opacity: "1" },
-          "100%": { transform: "scale(0)",   opacity: "0" },
+          "0%":   { transform: "scale(1)",    opacity: "1" },
+          "60%":  { transform: "scale(0.6)",  opacity: "0.5" },
+          "100%": { transform: "scale(0)",    opacity: "0" },
         },
         shake: {
           "0%, 100%": { transform: "translateX(0)" },
@@ -35,7 +36,7 @@ const config: Config = {
       },
       animation: {
         "pop-in":      "popIn 0.3s cubic-bezier(0.34,1.56,0.64,1) forwards",
-        "pop-out":     "popOut 0.25s ease-in forwards",
+        "pop-out":     "popOut 0.18s ease-in forwards",
         "shake":       "shake 0.35s ease",
         "score-float": "scoreFloat 0.8s ease-out forwards",
         "pulse2":      "pulse2 1s ease-in-out infinite",
