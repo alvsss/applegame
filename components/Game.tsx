@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSound } from "@/hooks/useSound";
+import { useBgm }   from "@/hooks/useBgm";
 
 /* ─────────────────── 상수 ─────────────────── */
 const ROWS = 9;
@@ -12,7 +13,7 @@ const GAME_TIME = 120;
 interface Cell {
   value: number;
   id: number;
-  isNew: boolean; // true = 방금 새로 생성된 셀 (팝인 애니메이션 재생)
+  isNew: boolean;
 }
 
 type Pos = { row: number; col: number };
@@ -20,27 +21,16 @@ type GameStatus = "idle" | "playing" | "over";
 
 /* ─────────────────── 헬퍼 ─────────────────── */
 let cellIdSeq = 0;
+const mkCell   = (): Cell => ({ value: Math.floor(Math.random() * 9) + 1, id: cellIdSeq++, isNew: true });
+const keepCell = (c: Cell): Cell => c.isNew ? { ...c, isNew: false } : c;
+const initGrid = (): Cell[][] => Array.from({ length: ROWS }, () => Array.from({ length: COLS }, mkCell));
 
-// 새 셀 생성 (isNew: true)
-const mkCell = (): Cell => ({
-  value: Math.floor(Math.random() * 9) + 1,
-  id: cellIdSeq++,
-  isNew: true,
-});
-
-// 기존 셀 유지 (isNew: false → 애니메이션 재생 안 함)
-const keepCell = (cell: Cell): Cell =>
-  cell.isNew ? { ...cell, isNew: false } : cell;
-
-const initGrid = (): Cell[][] =>
-  Array.from({ length: ROWS }, () => Array.from({ length: COLS }, mkCell));
-
-const isAdjacent = (a: Pos, b: Pos): boolean =>
+const isAdjacent = (a: Pos, b: Pos) =>
   (Math.abs(a.row - b.row) === 1 && a.col === b.col) ||
   (a.row === b.row && Math.abs(a.col - b.col) === 1);
 
-/* ─────────────────── 숫자별 색상 ─────────────────── */
-const CELL_COLORS: Record<number, string> = {
+/* ─────────────────── 색상 ─────────────────── */
+const COLORS: Record<number, string> = {
   1: "bg-red-400 shadow-red-200",
   2: "bg-orange-400 shadow-orange-200",
   3: "bg-amber-400 shadow-amber-200",
@@ -54,10 +44,11 @@ const CELL_COLORS: Record<number, string> = {
 
 /* ─────────────────── 컴포넌트 ─────────────────── */
 export default function Game() {
-  const [grid, setGrid] = useState<Cell[][]>(initGrid);
-  const [status, setStatus] = useState<GameStatus>("idle");
+  /* ── 게임 상태 ── */
+  const [grid,     setGrid]     = useState<Cell[][]>(initGrid);
+  const [status,   setStatus]   = useState<GameStatus>("idle");
   const [selection, setSelection] = useState<Pos[]>([]);
-  const [score, setScore] = useState(0);
+  const [score,    setScore]    = useState(0);
   const [highScore, setHighScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(GAME_TIME);
   const [removing, setRemoving] = useState<Set<string>>(new Set());
@@ -67,30 +58,60 @@ export default function Game() {
     { id: number; value: number; x: number; y: number }[]
   >([]);
 
-  const { playTick, playSuccess, playFail, playCombo, playGameOver, toggleMute, isMuted } = useSound();
-  const [muted, setMuted] = useState(false);
+  /* ── 볼륨 상태 (0~100) ── */
+  const [bgmVol, setBgmVol] = useState(55);
+  const [sfxVol, setSfxVol] = useState(80);
 
-  const dragging = useRef(false);
-  const isAnimating = useRef(false);
-  const selectionRef = useRef(selection);
-  const gridRef = useRef(grid);
-  const statusRef = useRef(status);
+  /* ── 사운드 훅 ── */
+  const { playTick, playSuccess, playFail, playCombo, playGameOver, setVolume: setSfxVolume } = useSound();
+  const bgm = useBgm();
+
+  /* ── Refs ── */
+  const dragging       = useRef(false);
+  const isAnimating    = useRef(false);
+  const selectionRef   = useRef(selection);
+  const gridRef        = useRef(grid);
+  const statusRef      = useRef(status);
+  const scoreRef       = useRef(score);
   const lastSuccessTime = useRef(0);
-  const comboRef = useRef(0);
-  const scoreRef = useRef(score);
-  const floatIdSeq = useRef(0);
-  const gridDomRef = useRef<HTMLDivElement>(null);
+  const comboRef       = useRef(0);
+  const floatIdSeq     = useRef(0);
+  const gridDomRef     = useRef<HTMLDivElement>(null);
 
   selectionRef.current = selection;
-  gridRef.current = grid;
-  statusRef.current = status;
-  scoreRef.current = score;
+  gridRef.current      = grid;
+  statusRef.current    = status;
+  scoreRef.current     = score;
 
+  /* ── 초기 로드 ── */
   useEffect(() => {
-    const stored = localStorage.getItem("appleGame_hs");
-    if (stored) setHighScore(Number(stored));
+    const hs  = localStorage.getItem("appleGame_hs");
+    const bv  = localStorage.getItem("appleGame_bgmVol");
+    const sv  = localStorage.getItem("appleGame_sfxVol");
+    if (hs) setHighScore(Number(hs));
+    if (bv) setBgmVol(Number(bv));
+    if (sv) setSfxVol(Number(sv));
   }, []);
 
+  /* ── BGM 볼륨 동기화 ── */
+  useEffect(() => {
+    bgm.setVolume(bgmVol / 100);
+    localStorage.setItem("appleGame_bgmVol", String(bgmVol));
+  }, [bgmVol]); // eslint-disable-line
+
+  /* ── SFX 볼륨 동기화 ── */
+  useEffect(() => {
+    setSfxVolume(sfxVol / 100);
+    localStorage.setItem("appleGame_sfxVol", String(sfxVol));
+  }, [sfxVol, setSfxVolume]);
+
+  /* ── BGM 재생/정지 ── */
+  useEffect(() => {
+    if (status === "playing") bgm.play();
+    else                      bgm.stop();
+  }, [status]); // eslint-disable-line
+
+  /* ── 타이머 ── */
   useEffect(() => {
     if (status !== "playing") return;
     if (timeLeft <= 0) {
@@ -106,8 +127,9 @@ export default function Game() {
     }
     const t = setInterval(() => setTimeLeft((s) => s - 1), 1000);
     return () => clearInterval(t);
-  }, [status, timeLeft]);
+  }, [status, timeLeft, playGameOver]);
 
+  /* ── 게임 시작 ── */
   const startGame = () => {
     setGrid(initGrid());
     setSelection([]);
@@ -118,91 +140,77 @@ export default function Game() {
     setIsShaking(false);
     setComboCount(0);
     setFloatingScores([]);
-    dragging.current = false;
-    isAnimating.current = false;
+    dragging.current     = false;
+    isAnimating.current  = false;
     lastSuccessTime.current = 0;
-    comboRef.current = 0;
+    comboRef.current     = 0;
   };
 
-  /* ─────────────────────────────────────────────────────────
+  /* ─────────────────────────────────────────────────────
      핵심 로직: 선택 확정
-     합 = 10 → 제거 애니메이션 → 중력 적용 → 위에서 새 셀 보충
-     합 ≠ 10 → 흔들기 후 선택 해제
-  ───────────────────────────────────────────────────────── */
+     합 = 10 → 제거 애니메이션 → 중력 적용 → 새 셀 보충
+     합 ≠ 10 → 흔들기
+  ───────────────────────────────────────────────────── */
   const confirmSelection = useCallback(() => {
     const sel = selectionRef.current;
-    const g = gridRef.current;
+    const g   = gridRef.current;
 
-    if (sel.length === 0 || statusRef.current !== "playing") return;
-    if (isAnimating.current) return;
+    if (!sel.length || statusRef.current !== "playing" || isAnimating.current) return;
 
     const sum = sel.reduce((acc, { row, col }) => acc + g[row][col].value, 0);
 
     if (sum === 10) {
       isAnimating.current = true;
+      setRemoving(new Set(sel.map(({ row, col }) => `${row}-${col}`)));
 
-      const removingSet = new Set(sel.map(({ row, col }) => `${row}-${col}`));
-      setRemoving(removingSet);
-
-      // 콤보 계산
-      const now = Date.now();
-      let newCombo = 1;
-      if (lastSuccessTime.current > 0 && now - lastSuccessTime.current < 2000) {
+      const now      = Date.now();
+      let newCombo   = 1;
+      if (lastSuccessTime.current > 0 && now - lastSuccessTime.current < 2000)
         newCombo = Math.min(comboRef.current + 1, 10);
-      }
-      comboRef.current = newCombo;
+      comboRef.current    = newCombo;
       lastSuccessTime.current = now;
       setComboCount(newCombo);
 
-      // 성공 사운드
       playSuccess(newCombo);
       playCombo(newCombo);
 
       const points = sel.length * 10 * newCombo;
 
-      // 플로팅 점수 표시
+      // 플로팅 점수
       if (gridDomRef.current) {
-        const firstCell = gridDomRef.current.querySelector(
+        const el = gridDomRef.current.querySelector(
           `[data-row="${sel[0].row}"][data-col="${sel[0].col}"]`
         );
-        if (firstCell) {
-          const rect = firstCell.getBoundingClientRect();
-          const fid = floatIdSeq.current++;
+        if (el) {
+          const r  = el.getBoundingClientRect();
+          const id = floatIdSeq.current++;
           setFloatingScores((prev) => [
             ...prev,
-            { id: fid, value: points, x: rect.left + rect.width / 2, y: rect.top },
+            { id, value: points, x: r.left + r.width / 2, y: r.top },
           ]);
-          setTimeout(() => {
-            setFloatingScores((prev) => prev.filter((f) => f.id !== fid));
-          }, 900);
+          setTimeout(() => setFloatingScores((prev) => prev.filter((f) => f.id !== id)), 900);
         }
       }
 
-      // 280ms 후 그리드 갱신
       setTimeout(() => {
         setGrid((prev) => {
           const removed = new Set(sel.map(({ row, col }) => `${row}-${col}`));
           const next: Cell[][] = Array.from({ length: ROWS }, () => new Array(COLS));
 
           for (let c = 0; c < COLS; c++) {
-            // ① 제거되지 않은 기존 셀을 아래에서 위로 수집
-            //    keepCell()로 isNew=false 표시 → 이 셀들은 애니메이션 재생 안 함
+            // 기존 셀을 아래에서 위 순서로 수집 (isNew=false 처리)
             const kept: Cell[] = [];
-            for (let r = ROWS - 1; r >= 0; r--) {
-              if (!removed.has(`${r}-${c}`)) {
-                kept.push(keepCell(prev[r][c]));
-              }
-            }
-            // ② 기존 셀을 아래부터 채우기 (중력)
-            for (let i = 0; i < kept.length; i++) {
-              next[ROWS - 1 - i][c] = kept[i];
-            }
-            // ③ 빈 위칸에 새 셀 채우기 (isNew: true → 팝인 애니메이션 재생)
-            for (let r = 0; r < ROWS - kept.length; r++) {
-              next[r][c] = mkCell();
-            }
-          }
+            for (let r = ROWS - 1; r >= 0; r--)
+              if (!removed.has(`${r}-${c}`)) kept.push(keepCell(prev[r][c]));
 
+            // 아래부터 기존 셀 배치
+            for (let i = 0; i < kept.length; i++)
+              next[ROWS - 1 - i][c] = kept[i];
+
+            // 위 빈칸에 새 셀 (isNew=true → 팝인 애니메이션)
+            for (let r = 0; r < ROWS - kept.length; r++)
+              next[r][c] = mkCell();
+          }
           return next;
         });
 
@@ -211,6 +219,7 @@ export default function Game() {
         setSelection([]);
         isAnimating.current = false;
       }, 280);
+
     } else {
       if (sel.length >= 2) {
         setIsShaking(true);
@@ -221,6 +230,7 @@ export default function Game() {
     }
   }, [playSuccess, playCombo, playFail]);
 
+  /* ── 전역 mouseup ── */
   useEffect(() => {
     const onUp = () => {
       if (!dragging.current) return;
@@ -231,6 +241,7 @@ export default function Game() {
     return () => window.removeEventListener("mouseup", onUp);
   }, [confirmSelection]);
 
+  /* ── 셀 이벤트 핸들러 ── */
   const onCellMouseDown = (row: number, col: number) => {
     if (statusRef.current !== "playing" || isAnimating.current) return;
     dragging.current = true;
@@ -241,32 +252,31 @@ export default function Game() {
   const onCellMouseEnter = useCallback((row: number, col: number) => {
     if (!dragging.current || isAnimating.current) return;
     setSelection((prev) => {
-      if (prev.length === 0) return prev;
-      const existIdx = prev.findIndex((s) => s.row === row && s.col === col);
-      if (existIdx >= 0) {
-        // 되감기: 피치 내려감
-        playTick(Math.max(existIdx - 1, 0));
-        return prev.slice(0, existIdx + 1);
+      if (!prev.length) return prev;
+      const idx = prev.findIndex((s) => s.row === row && s.col === col);
+      if (idx >= 0) {
+        playTick(Math.max(idx - 1, 0));
+        return prev.slice(0, idx + 1);
       }
       const last = prev[prev.length - 1];
       if (!isAdjacent(last, { row, col })) return prev;
-      playTick(prev.length); // 선택할수록 높은 피치
+      playTick(prev.length);
       return [...prev, { row, col }];
     });
   }, [playTick]);
 
-  const getCellFromPoint = (x: number, y: number): Pos | null => {
+  /* ── 터치 이벤트 ── */
+  const getPos = (x: number, y: number): Pos | null => {
     const el = document.elementFromPoint(x, y);
-    const r = el?.getAttribute("data-row");
-    const c = el?.getAttribute("data-col");
-    if (r != null && c != null) return { row: +r, col: +c };
-    return null;
+    const r  = el?.getAttribute("data-row");
+    const c  = el?.getAttribute("data-col");
+    return r != null && c != null ? { row: +r, col: +c } : null;
   };
 
   const onTouchStart = (e: React.TouchEvent) => {
     if (statusRef.current !== "playing" || isAnimating.current) return;
     const { clientX, clientY } = e.touches[0];
-    const pos = getCellFromPoint(clientX, clientY);
+    const pos = getPos(clientX, clientY);
     if (!pos) return;
     dragging.current = true;
     playTick(0);
@@ -276,9 +286,8 @@ export default function Game() {
   const onTouchMove = (e: React.TouchEvent) => {
     if (!dragging.current) return;
     const { clientX, clientY } = e.touches[0];
-    const pos = getCellFromPoint(clientX, clientY);
-    if (!pos) return;
-    onCellMouseEnter(pos.row, pos.col);
+    const pos = getPos(clientX, clientY);
+    if (pos) onCellMouseEnter(pos.row, pos.col);
   };
 
   const onTouchEnd = () => {
@@ -287,36 +296,26 @@ export default function Game() {
     confirmSelection();
   };
 
+  /* ── 파생값 ── */
   const selSum = selection.reduce(
-    (acc, { row, col }) => acc + (grid[row]?.[col]?.value ?? 0),
-    0
+    (acc, { row, col }) => acc + (grid[row]?.[col]?.value ?? 0), 0
   );
   const timerRatio = timeLeft / GAME_TIME;
-  const timerColor =
-    timeLeft > 60 ? "bg-green-400" : timeLeft > 20 ? "bg-yellow-400" : "bg-red-500";
+  const timerColor = timeLeft > 60 ? "bg-green-400" : timeLeft > 20 ? "bg-yellow-400" : "bg-red-500";
   const isNewRecord = status === "over" && score > 0 && score >= highScore;
 
+  /* ─────────────────── 렌더 ─────────────────── */
   return (
     <div
-      className="flex flex-col items-center min-h-screen py-4 px-3"
+      className="flex flex-col items-center min-h-screen py-4 px-3 gap-3"
       style={{ touchAction: "none" }}
     >
-      {/* 제목 + 뮤트 버튼 */}
-      <div className="flex items-center gap-3 mb-3">
-        <h1 className="text-3xl font-black text-orange-600 tracking-tight">
-          🍎 사과게임
-        </h1>
-        <button
-          onClick={() => setMuted(toggleMute())}
-          className="text-2xl leading-none opacity-70 hover:opacity-100 transition-opacity active:scale-90"
-          title={muted ? "소리 켜기" : "소리 끄기"}
-        >
-          {muted ? "🔇" : "🔊"}
-        </button>
-      </div>
+      {/* 제목 */}
+      <h1 className="text-3xl font-black text-orange-600 tracking-tight">🍎 사과게임</h1>
 
+      {/* ── HUD (게임 중) ── */}
       {status === "playing" && (
-        <div className="w-full max-w-xs mb-3 space-y-2">
+        <div className="w-full max-w-xs space-y-2">
           <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-1000 ${timerColor}`}
@@ -324,31 +323,19 @@ export default function Game() {
             />
           </div>
           <div className="flex justify-between items-center">
-            <Stat
-              label="시간"
-              value={`${timeLeft}s`}
-              className={timeLeft <= 10 ? "text-red-500 animate-pulse2" : "text-gray-700"}
-            />
-            <Stat
-              label="합계"
-              value={selSum > 0 ? String(selSum) : "—"}
-              className={
-                selSum === 10 ? "text-green-500" :
-                selSum > 10  ? "text-red-500"   :
-                selSum > 0   ? "text-orange-500": "text-gray-300"
-              }
-            />
-            <Stat label="점수" value={String(score)} className="text-orange-600" />
-            <Stat label="최고" value={String(highScore)} className="text-purple-600" />
+            <Stat label="시간"  value={`${timeLeft}s`} className={timeLeft <= 10 ? "text-red-500 animate-pulse2" : "text-gray-700"} />
+            <Stat label="합계"  value={selSum > 0 ? String(selSum) : "—"}
+              className={selSum === 10 ? "text-green-500" : selSum > 10 ? "text-red-500" : selSum > 0 ? "text-orange-500" : "text-gray-300"} />
+            <Stat label="점수"  value={String(score)}     className="text-orange-600" />
+            <Stat label="최고"  value={String(highScore)} className="text-purple-600" />
           </div>
           {comboCount > 1 && (
-            <div className="text-center text-orange-500 font-black text-lg leading-none">
-              🔥 {comboCount}x COMBO!
-            </div>
+            <div className="text-center text-orange-500 font-black text-lg">🔥 {comboCount}x COMBO!</div>
           )}
         </div>
       )}
 
+      {/* ── 그리드 ── */}
       {status !== "idle" && (
         <div
           className={`bg-white/80 backdrop-blur p-2 rounded-2xl shadow-2xl border-2 border-orange-200 ${isShaking ? "animate-shake" : ""}`}
@@ -358,18 +345,11 @@ export default function Game() {
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
         >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${COLS}, 1fr)`,
-              gap: "4px",
-            }}
-          >
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: "4px" }}>
             {grid.map((row, r) =>
               row.map((cell, c) => {
                 const isSelected = selection.some((s) => s.row === r && s.col === c);
                 const isRemoving = removing.has(`${r}-${c}`);
-
                 return (
                   <div
                     key={cell.id}
@@ -378,20 +358,14 @@ export default function Game() {
                     className={[
                       "aspect-square rounded-xl flex items-center justify-center",
                       "font-black text-white text-base cursor-pointer shadow-md",
-                      // isNew인 셀만 팝인 애니메이션 → 기존 셀은 그대로 자리만 이동
                       cell.isNew ? "animate-pop-in" : "",
-                      CELL_COLORS[cell.value],
+                      COLORS[cell.value],
                       isSelected
                         ? "ring-4 ring-white ring-offset-1 scale-110 brightness-125 z-10 relative"
                         : "hover:brightness-110 active:brightness-125",
                       isRemoving ? "animate-pop-out pointer-events-none" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      onCellMouseDown(r, c);
-                    }}
+                    ].filter(Boolean).join(" ")}
+                    onMouseDown={(e) => { e.preventDefault(); onCellMouseDown(r, c); }}
                     onMouseEnter={() => onCellMouseEnter(r, c)}
                   >
                     {cell.value}
@@ -403,40 +377,42 @@ export default function Game() {
         </div>
       )}
 
+      {/* ── 볼륨 컨트롤 (항상 표시) ── */}
+      <div className="bg-white/70 backdrop-blur rounded-2xl px-5 py-3 shadow border border-orange-100 flex items-center gap-6">
+        <VolumeCtrl icon="🎵" label="BGM"  value={bgmVol} onChange={setBgmVol} />
+        <div className="w-px h-8 bg-gray-200" />
+        <VolumeCtrl icon="🔊" label="효과음" value={sfxVol} onChange={setSfxVol} />
+      </div>
+
+      {/* ── 시작 화면 ── */}
       {status === "idle" && (
-        <div className="flex flex-col items-center gap-5 mt-6 max-w-xs w-full px-2">
+        <div className="flex flex-col items-center gap-4 max-w-xs w-full px-2">
           <div className="bg-white/90 rounded-2xl p-5 shadow-lg border border-orange-100 w-full space-y-3">
             <RuleItem icon="👆" text="인접한 숫자를 드래그로 연결하세요" />
-            <RuleItem
-              icon="🎯"
-              text={<>합이 <strong className="text-orange-500">10</strong>이 되면 제거 &amp; 점수!</>}
-            />
+            <RuleItem icon="🎯" text={<>합이 <strong className="text-orange-500">10</strong>이 되면 제거 &amp; 점수!</>} />
             <RuleItem icon="🔥" text="연속 성공하면 콤보 보너스!" />
             <RuleItem icon="⏱️" text="제한 시간: 120초" />
           </div>
-          {highScore > 0 && (
-            <p className="text-purple-600 font-bold text-sm">최고 기록: {highScore}점</p>
-          )}
+          {highScore > 0 && <p className="text-purple-600 font-bold text-sm">최고 기록: {highScore}점</p>}
           <button
             onClick={startGame}
-            className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-black text-2xl rounded-2xl shadow-lg hover:brightness-110 active:scale-95 transition-all duration-150"
+            className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-black text-2xl rounded-2xl shadow-lg hover:brightness-110 active:scale-95 transition-all"
           >
             게임 시작!
           </button>
         </div>
       )}
 
+      {/* ── 게임 오버 ── */}
       {status === "over" && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-30 px-6">
           <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center">
             <div className="text-6xl mb-2">{isNewRecord ? "🏆" : "🎊"}</div>
-            <h2 className="text-2xl font-black text-gray-800 mb-5">게임 종료!</h2>
+            <h2 className="text-2xl font-black mb-5">게임 종료!</h2>
             <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-4 mb-4 border border-orange-100">
               <p className="text-sm text-gray-400 mb-1">최종 점수</p>
               <p className="text-6xl font-black text-orange-600 leading-none">{score}</p>
-              {isNewRecord && (
-                <p className="text-green-500 font-bold text-sm mt-2">✨ 새로운 최고 기록!</p>
-              )}
+              {isNewRecord && <p className="text-green-500 font-bold text-sm mt-2">✨ 새로운 최고 기록!</p>}
             </div>
             <div className="mb-6">
               <p className="text-xs text-gray-400">역대 최고</p>
@@ -452,6 +428,7 @@ export default function Game() {
         </div>
       )}
 
+      {/* ── 플로팅 점수 ── */}
       {floatingScores.map((f) => (
         <div
           key={f.id}
@@ -464,6 +441,8 @@ export default function Game() {
     </div>
   );
 }
+
+/* ─────────────────── 서브 컴포넌트 ─────────────────── */
 
 function Stat({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
@@ -479,6 +458,34 @@ function RuleItem({ icon, text }: { icon: string; text: React.ReactNode }) {
     <div className="flex items-start gap-3 text-sm text-gray-600">
       <span className="text-xl leading-none">{icon}</span>
       <span className="leading-snug">{text}</span>
+    </div>
+  );
+}
+
+function VolumeCtrl({
+  icon, label, value, onChange,
+}: {
+  icon: string;
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="text-base leading-none">{icon}</span>
+        <span className="text-xs text-gray-400 font-medium">{label}</span>
+        <span className="text-xs text-gray-500 font-bold w-6 text-right">{value}</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-28 h-1.5 accent-orange-500 cursor-pointer"
+      />
     </div>
   );
 }
