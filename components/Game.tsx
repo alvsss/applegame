@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSound } from "@/hooks/useSound";
 
 /* ─────────────────── 상수 ─────────────────── */
 const ROWS = 9;
@@ -66,6 +67,9 @@ export default function Game() {
     { id: number; value: number; x: number; y: number }[]
   >([]);
 
+  const { playTick, playSuccess, playFail, playCombo, playGameOver, toggleMute, isMuted } = useSound();
+  const [muted, setMuted] = useState(false);
+
   const dragging = useRef(false);
   const isAnimating = useRef(false);
   const selectionRef = useRef(selection);
@@ -91,6 +95,7 @@ export default function Game() {
     if (status !== "playing") return;
     if (timeLeft <= 0) {
       setStatus("over");
+      playGameOver();
       const final = scoreRef.current;
       setHighScore((prev) => {
         const next = Math.max(prev, final);
@@ -149,6 +154,10 @@ export default function Game() {
       lastSuccessTime.current = now;
       setComboCount(newCombo);
 
+      // 성공 사운드
+      playSuccess(newCombo);
+      playCombo(newCombo);
+
       const points = sel.length * 10 * newCombo;
 
       // 플로팅 점수 표시
@@ -205,11 +214,12 @@ export default function Game() {
     } else {
       if (sel.length >= 2) {
         setIsShaking(true);
+        playFail();
         setTimeout(() => setIsShaking(false), 380);
       }
       setSelection([]);
     }
-  }, []);
+  }, [playSuccess, playCombo, playFail]);
 
   useEffect(() => {
     const onUp = () => {
@@ -224,6 +234,7 @@ export default function Game() {
   const onCellMouseDown = (row: number, col: number) => {
     if (statusRef.current !== "playing" || isAnimating.current) return;
     dragging.current = true;
+    playTick(0);
     setSelection([{ row, col }]);
   };
 
@@ -232,12 +243,17 @@ export default function Game() {
     setSelection((prev) => {
       if (prev.length === 0) return prev;
       const existIdx = prev.findIndex((s) => s.row === row && s.col === col);
-      if (existIdx >= 0) return prev.slice(0, existIdx + 1);
+      if (existIdx >= 0) {
+        // 되감기: 피치 내려감
+        playTick(Math.max(existIdx - 1, 0));
+        return prev.slice(0, existIdx + 1);
+      }
       const last = prev[prev.length - 1];
       if (!isAdjacent(last, { row, col })) return prev;
+      playTick(prev.length); // 선택할수록 높은 피치
       return [...prev, { row, col }];
     });
-  }, []);
+  }, [playTick]);
 
   const getCellFromPoint = (x: number, y: number): Pos | null => {
     const el = document.elementFromPoint(x, y);
@@ -253,6 +269,7 @@ export default function Game() {
     const pos = getCellFromPoint(clientX, clientY);
     if (!pos) return;
     dragging.current = true;
+    playTick(0);
     setSelection([pos]);
   };
 
@@ -284,9 +301,19 @@ export default function Game() {
       className="flex flex-col items-center min-h-screen py-4 px-3"
       style={{ touchAction: "none" }}
     >
-      <h1 className="text-3xl font-black text-orange-600 mb-3 tracking-tight">
-        🍎 사과게임
-      </h1>
+      {/* 제목 + 뮤트 버튼 */}
+      <div className="flex items-center gap-3 mb-3">
+        <h1 className="text-3xl font-black text-orange-600 tracking-tight">
+          🍎 사과게임
+        </h1>
+        <button
+          onClick={() => setMuted(toggleMute())}
+          className="text-2xl leading-none opacity-70 hover:opacity-100 transition-opacity active:scale-90"
+          title={muted ? "소리 켜기" : "소리 끄기"}
+        >
+          {muted ? "🔇" : "🔊"}
+        </button>
+      </div>
 
       {status === "playing" && (
         <div className="w-full max-w-xs mb-3 space-y-2">
