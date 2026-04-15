@@ -66,6 +66,9 @@ export default function Game() {
   const [comboCount,    setComboCount]    = useState(0);
   const [bgmVol,        setBgmVol]        = useState(55);
   const [sfxVol,        setSfxVol]        = useState(80);
+  const [showSettings,  setShowSettings]  = useState(false);
+  const [vibration,     setVibration]     = useState(true);
+  const [showTimer,     setShowTimer]     = useState(true);
   const [floatingScores, setFloatingScores] = useState<
     { id: number; value: number; x: number; y: number }[]
   >([]);
@@ -84,6 +87,8 @@ export default function Game() {
   const lastSuccessTime = useRef(0);
   const comboRef        = useRef(0);
   const comboTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const vibrationRef    = useRef(true);
+  vibrationRef.current  = vibration;
   const floatIdSeq      = useRef(0);
   const gridDomRef      = useRef<HTMLDivElement>(null);
   // FLIP 애니메이션용: 그리드 업데이트 직전 각 셀의 화면 위치를 보관
@@ -102,6 +107,10 @@ export default function Game() {
     if (hs) setHighScore(Number(hs));
     if (bv) setBgmVol(Number(bv));
     if (sv) setSfxVol(Number(sv));
+    const vb = localStorage.getItem("appleGame_vibration");
+    const st = localStorage.getItem("appleGame_showTimer");
+    if (vb !== null) setVibration(vb === "1");
+    if (st !== null) setShowTimer(st === "1");
   }, []);
 
   /* ── 볼륨 동기화 ── */
@@ -115,6 +124,14 @@ export default function Game() {
     localStorage.setItem("appleGame_sfxVol", String(sfxVol));
   }, [sfxVol, setSfxVolume]);
 
+  useEffect(() => {
+    localStorage.setItem("appleGame_vibration", vibration ? "1" : "0");
+  }, [vibration]);
+
+  useEffect(() => {
+    localStorage.setItem("appleGame_showTimer", showTimer ? "1" : "0");
+  }, [showTimer]);
+
   /* ── BGM 재생/정지 ── */
   useEffect(() => {
     if (status === "playing") bgm.play();
@@ -127,6 +144,7 @@ export default function Game() {
     if (timeLeft <= 0) {
       setStatus("over");
       playGameOver();
+      if (vibrationRef.current) navigator.vibrate?.([60, 30, 60]);
       const final = scoreRef.current;
       setHighScore((prev) => {
         const next = Math.max(prev, final);
@@ -231,6 +249,7 @@ export default function Game() {
 
       playSuccess(newCombo);
       playCombo(newCombo);
+      if (vibrationRef.current) navigator.vibrate?.(30);
 
       const points = sel.length * 10 * newCombo;
 
@@ -297,6 +316,7 @@ export default function Game() {
       if (sel.length >= 2) {
         setIsShaking(true);
         playFail();
+        if (vibrationRef.current) navigator.vibrate?.(60);
         setTimeout(() => setIsShaking(false), 380);
       }
       setSelection([]);
@@ -378,19 +398,29 @@ export default function Game() {
       className="flex flex-col items-center min-h-screen py-4 px-3 gap-3"
       style={{ touchAction: "none" }}
     >
-      <h1 className="text-3xl font-black text-orange-600 tracking-tight">🍎 사과게임</h1>
+      <div className="flex items-center w-full max-w-xs justify-center relative">
+        <h1 className="text-3xl font-black text-orange-600 tracking-tight">🍎 사과게임</h1>
+        <button
+          onClick={() => setShowSettings(true)}
+          className="absolute right-0 w-9 h-9 flex items-center justify-center rounded-full bg-white/70 shadow text-xl hover:bg-white transition-all active:scale-90"
+        >⚙️</button>
+      </div>
 
       {/* HUD */}
       {status === "playing" && (
         <div className="w-full max-w-xs space-y-2">
-          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-1000 ${timerColor}`}
-              style={{ width: `${timerRatio * 100}%` }}
-            />
-          </div>
+          {showTimer && (
+            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-1000 ${timerColor}`}
+                style={{ width: `${timerRatio * 100}%` }}
+              />
+            </div>
+          )}
           <div className="flex justify-between items-center">
-            <Stat label="시간" value={`${Math.floor(timeLeft)}s`} className={timeLeft <= 10 ? "text-red-500 animate-pulse2" : "text-gray-700"} />
+            {showTimer
+              ? <Stat label="시간" value={`${Math.floor(timeLeft)}s`} className={timeLeft <= 10 ? "text-red-500 animate-pulse2" : "text-gray-700"} />
+              : <div className="min-w-[56px]" />}
             <Stat label="합계" value={selSum > 0 ? String(selSum) : "—"}
               className={selSum === 10 ? "text-green-500" : selSum > 10 ? "text-red-500" : selSum > 0 ? "text-orange-500" : "text-gray-300"} />
             <Stat label="점수" value={String(score)}     className="text-orange-600" />
@@ -448,12 +478,6 @@ export default function Game() {
         </div>
       )}
 
-      {/* 볼륨 컨트롤 */}
-      <div className="bg-white/70 backdrop-blur rounded-2xl px-5 py-3 shadow border border-orange-100 flex items-center gap-6">
-        <VolumeCtrl icon="🎵" label="BGM"   value={bgmVol} onChange={setBgmVol} />
-        <div className="w-px h-8 bg-gray-200" />
-        <VolumeCtrl icon="🔊" label="효과음" value={sfxVol} onChange={setSfxVol} />
-      </div>
 
       {/* 시작 화면 */}
       {status === "idle" && (
@@ -499,6 +523,34 @@ export default function Game() {
         </div>
       )}
 
+      {/* 설정 모달 */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-40 px-6" onClick={() => setShowSettings(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xl font-black text-gray-800">⚙️ 설정</h2>
+              <button onClick={() => setShowSettings(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200">✕</button>
+            </div>
+            <div className="space-y-5">
+              <SettingSlider icon="🎵" label="BGM 볼륨"   value={bgmVol} onChange={setBgmVol} />
+              <SettingSlider icon="🔊" label="효과음 볼륨" value={sfxVol} onChange={setSfxVol} />
+              <SettingRow icon="📳" label="진동">
+                <Toggle value={vibration} onChange={setVibration} />
+              </SettingRow>
+              <SettingRow icon="⏱️" label="타이머 표시">
+                <Toggle value={showTimer} onChange={setShowTimer} />
+              </SettingRow>
+              {status !== "idle" && (
+                <button
+                  onClick={() => { startGame(); setShowSettings(false); }}
+                  className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-black text-lg rounded-2xl shadow active:scale-95 transition-all hover:brightness-110"
+                >재시작</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 플로팅 점수 */}
       {floatingScores.map((f) => (
         <div
@@ -529,6 +581,37 @@ function RuleItem({ icon, text }: { icon: string; text: React.ReactNode }) {
       <span className="text-xl leading-none">{icon}</span>
       <span className="leading-snug">{text}</span>
     </div>
+  );
+}
+
+function SettingSlider({ icon, label, value, onChange }: { icon: string; label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 text-sm font-medium text-gray-700 w-28 shrink-0">
+        <span className="text-base">{icon}</span><span>{label}</span>
+      </div>
+      <input type="range" min={0} max={100} step={1} value={value} onChange={(e) => onChange(Number(e.target.value))} className="flex-1 h-1.5 accent-orange-500 cursor-pointer" />
+      <span className="text-xs text-gray-500 font-bold w-6 text-right">{value}</span>
+    </div>
+  );
+}
+
+function SettingRow({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+        <span className="text-base">{icon}</span><span>{label}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button onClick={() => onChange(!value)} className={`w-12 h-6 rounded-full transition-colors relative ${value ? "bg-orange-500" : "bg-gray-300"}`}>
+      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-0.5"}`} />
+    </button>
   );
 }
 
