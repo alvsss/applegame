@@ -380,7 +380,7 @@ export default function Game() {
             />
           </div>
           <div className="flex justify-between items-center">
-            <Stat label="시간" value={`${timeLeft}s`} className={timeLeft <= 10 ? "text-red-500 animate-pulse2" : "text-gray-700"} />
+            <Stat label="시간" value={`${Math.floor(timeLeft)}s`} className={timeLeft <= 10 ? "text-red-500 animate-pulse2" : "text-gray-700"} />
             <Stat label="합계" value={selSum > 0 ? String(selSum) : "—"}
               className={selSum === 10 ? "text-green-500" : selSum > 10 ? "text-red-500" : selSum > 0 ? "text-orange-500" : "text-gray-300"} />
             <Stat label="점수" value={String(score)}     className="text-orange-600" />
