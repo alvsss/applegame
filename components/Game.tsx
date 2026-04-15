@@ -77,6 +77,7 @@ export default function Game() {
   const scoreRef        = useRef(score);
   const lastSuccessTime = useRef(0);
   const comboRef        = useRef(0);
+  const comboTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const floatIdSeq      = useRef(0);
   const gridDomRef      = useRef<HTMLDivElement>(null);
   // FLIP 애니메이션용: 그리드 업데이트 직전 각 셀의 화면 위치를 보관
@@ -186,6 +187,7 @@ export default function Game() {
     isAnimating.current     = false;
     lastSuccessTime.current = 0;
     comboRef.current        = 0;
+    if (comboTimerRef.current) { clearTimeout(comboTimerRef.current); comboTimerRef.current = null; }
   };
 
   /* ════════════════════════════════════════════════
@@ -218,6 +220,8 @@ export default function Game() {
       comboRef.current        = newCombo;
       lastSuccessTime.current = now;
       setComboCount(newCombo);
+      if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
+      comboTimerRef.current = setTimeout(() => setComboCount(0), 2000);
 
       playSuccess(newCombo);
       playCombo(newCombo);
