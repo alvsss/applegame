@@ -33,6 +33,10 @@ const config: Config = {
           "0%, 100%": { transform: "scale(1)" },
           "50%":      { transform: "scale(1.05)" },
         },
+        comboPulse: {
+          "0%, 100%": { opacity: "0.9" },
+          "50%":      { opacity: "0.08" },
+        },
       },
       animation: {
         "pop-in":      "popIn 0.3s cubic-bezier(0.34,1.56,0.64,1) forwards",
@@ -40,6 +44,7 @@ const config: Config = {
         "shake":       "shake 0.35s ease",
         "score-float": "scoreFloat 0.8s ease-out forwards",
         "pulse2":      "pulse2 1s ease-in-out infinite",
+        "combo-pulse": "comboPulse 1s ease-in-out infinite",
       },
     },
   },

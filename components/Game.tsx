@@ -390,7 +390,10 @@ export default function Game() {
   const selSum     = selection.reduce((acc, { row, col }) => acc + (grid[row]?.[col]?.value ?? 0), 0);
   const timerRatio = timeLeft / GAME_TIME;
   const timerColor = timeLeft > 60 ? "bg-green-400" : timeLeft > 20 ? "bg-yellow-400" : "bg-red-500";
-  const isNewRecord = status === "over" && score > 0 && score >= highScore;
+  const isNewRecord     = status === "over" && score > 0 && score >= highScore;
+  const comboPulseT     = comboCount > 1 ? Math.min((comboCount - 1) / 9, 1) : 0;
+  const comboPulseColor = `rgba(255,${Math.round(200 - 150 * comboPulseT)},${Math.round(50 - 50 * comboPulseT)},${(0.30 + 0.35 * comboPulseT).toFixed(2)})`;
+  const comboPulseDur   = `${(1.4 - comboPulseT * 1.15).toFixed(2)}s`;
 
   /* ─────────────────── 렌더 ─────────────────── */
   return (
@@ -432,19 +435,20 @@ export default function Game() {
       {/* 그리드 */}
       {status !== "idle" && (
         <div className="relative" style={{ width: "min(100%, 336px)" }}>
-          {comboCount > 1 && (
-            <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-              <span className="text-orange-500 font-black text-3xl drop-shadow-lg">🔥 {comboCount}x COMBO!</span>
-            </div>
-          )}
           <div
-            className={`bg-white/80 backdrop-blur p-2 rounded-2xl shadow-2xl border-2 border-orange-200 ${isShaking ? "animate-shake" : ""}`}
+            className={`relative bg-white/80 backdrop-blur p-2 rounded-2xl shadow-2xl border-2 border-orange-200 ${isShaking ? "animate-shake" : ""}`}
             ref={gridDomRef}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
         >
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: "4px" }}>
+          {comboCount > 1 && (
+            <div
+              className="absolute inset-0 rounded-2xl pointer-events-none animate-combo-pulse"
+              style={{ backgroundColor: comboPulseColor, animationDuration: comboPulseDur, zIndex: 0 }}
+            />
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: "4px", position: "relative", zIndex: 1 }}>
             {grid.map((row, r) =>
               row.map((cell, c) => {
                 const isSelected = selection.some((s) => s.row === r && s.col === c);
