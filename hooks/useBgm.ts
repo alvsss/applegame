@@ -11,6 +11,11 @@ const LOOP_DUR   = LOOP_BEATS * BEAT; // ≈ 28초
 const LOOKAHEAD  = 0.22;
 const TICK_MS    = 25;
 
+const BPM_B        = 160;
+const BEAT_B       = 60 / BPM_B;
+const LOOP_BEATS_B = 32;              // 8마디 루프 ≈ 12초
+const LOOP_DUR_B   = LOOP_BEATS_B * BEAT_B;
+
 /* ─────────────────────────────────────────────
    멜로디: [주파수(Hz), 박자수]
    C 장조 16마디, 138 BPM — 코드 진행: C→G→Am→F
@@ -83,12 +88,46 @@ const PADS: [number, number, number][] = [
   [174.61,220.00,261.63],[174.61,220.00,261.63],
 ];
 
+/* ── Track B: D단조, 160BPM, 중독성 8마디 ── */
+const MELODY_B: [number, number][] = [
+  // 마디 1 — Dm, 상승 런
+  [587.33,0.5],[698.46,0.5],[880.00,0.5],[698.46,0.5],[587.33,0.5],[440.00,0.5],[349.23,0.5],[293.66,0.5],
+  // 마디 2 — Dm, 훅
+  [698.46,1],[880.00,1],[783.99,0.5],[698.46,0.5],[587.33,1],
+  // 마디 3 — G, 빌드업
+  [783.99,0.5],[880.00,0.5],[783.99,0.5],[698.46,0.5],[587.33,0.5],[698.46,0.5],[783.99,0.5],[880.00,0.5],
+  // 마디 4 — G, 피크
+  [880.00,2],[783.99,1],[698.46,1],
+  // 마디 5 — Am, 고조
+  [1046.50,0.5],[880.00,0.5],[783.99,0.5],[698.46,0.5],[587.33,0.5],[698.46,0.5],[783.99,0.5],[880.00,0.5],
+  // 마디 6 — Am, 하강
+  [880.00,0.5],[783.99,0.5],[698.46,0.5],[587.33,0.5],[440.00,0.5],[349.23,0.5],[293.66,0.5],[220.00,0.5],
+  // 마디 7 — F, 클라임
+  [440.00,0.5],[523.25,0.5],[587.33,0.5],[698.46,0.5],[880.00,0.5],[1046.50,0.5],[880.00,0.5],[698.46,0.5],
+  // 마디 8 — 루프 접합 (D 해결)
+  [587.33,0.5],[698.46,0.5],[440.00,0.5],[349.23,0.5],[293.66,1],[587.33,1],
+];
+const BASS_B: [number, number][] = [
+  [146.83,2],[110.00,2], [146.83,2],[110.00,2], // Dm
+  [98.00,2], [146.83,2], [98.00,2], [146.83,2], // G
+  [110.00,2],[82.41,2],  [110.00,2],[82.41,2],  // Am
+  [87.31,2], [130.81,2], [87.31,2], [146.83,2], // F→D
+];
+const PADS_B: [number, number, number][] = [
+  [146.83,174.61,220.00],[146.83,174.61,220.00], // Dm
+  [196.00,246.94,293.66],[196.00,246.94,293.66], // G
+  [220.00,261.63,329.63],[220.00,261.63,329.63], // Am
+  [174.61,220.00,261.63],[174.61,220.00,261.63], // F
+];
+
 export function useBgm() {
   const masterGain = useRef<GainNode | null>(null);
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const nextTime   = useRef(0);
   const noiseBuf   = useRef<AudioBuffer | null>(null);
-  const volRef     = useRef(0.5);
+  const volRef        = useRef(0.5);
+  const trackRef      = useRef(0);
+  const isPlayingRef  = useRef(false);
 
   const getGain = (): GainNode => {
     const ac = getCtx();
@@ -114,12 +153,12 @@ export function useBgm() {
   };
 
   /* ── 멜로디 (triangle 파, 더 밝고 신남) ── */
-  const scheduleMelody = (t0: number) => {
+  const scheduleMelody = (t0: number, melody = MELODY, beat = BEAT) => {
     const ac  = getCtx();
     const out = getGain();
     let   t   = t0;
-    for (const [freq, beats] of MELODY) {
-      const dur = beats * BEAT;
+    for (const [freq, beats] of melody) {
+      const dur = beats * beat;
       const osc = ac.createOscillator();
       const lpf = ac.createBiquadFilter();
       const env = ac.createGain();
@@ -139,12 +178,12 @@ export function useBgm() {
   };
 
   /* ── 베이스 (triangle + 로우패스) ── */
-  const scheduleBass = (t0: number) => {
+  const scheduleBass = (t0: number, bass = BASS, beat = BEAT) => {
     const ac  = getCtx();
     const out = getGain();
     let   t   = t0;
-    for (const [freq, beats] of BASS) {
-      const dur = beats * BEAT;
+    for (const [freq, beats] of bass) {
+      const dur = beats * beat;
       const osc = ac.createOscillator();
       const lpf = ac.createBiquadFilter();
       const env = ac.createGain();
@@ -165,12 +204,12 @@ export function useBgm() {
   };
 
   /* ── 코드 패드 (sine, 아주 소프트) ── */
-  const schedulePads = (t0: number) => {
+  const schedulePads = (t0: number, pads = PADS, beat = BEAT) => {
     const ac  = getCtx();
     const out = getGain();
-    PADS.forEach((triad, i) => {
-      const t   = t0 + i * 4 * BEAT;
-      const dur = 4 * BEAT;
+    pads.forEach((triad, i) => {
+      const t   = t0 + i * 4 * beat;
+      const dur = 4 * beat;
       triad.forEach((freq) => {
         const osc = ac.createOscillator();
         const env = ac.createGain();
@@ -187,12 +226,12 @@ export function useBgm() {
   };
 
   /* ── 킥 드럼 (마디 1·3박 = 매 2박자) ── */
-  const scheduleKick = (t0: number) => {
+  const scheduleKick = (t0: number, loopBeats = LOOP_BEATS, beat = BEAT) => {
     const ac  = getCtx();
     const out = getGain();
-    const count = LOOP_BEATS / 2; // 16 킥
+    const count = loopBeats / 2;
     for (let i = 0; i < count; i++) {
-      const t   = t0 + i * 2 * BEAT;
+      const t   = t0 + i * 2 * beat;
       const dur = 0.14;
       const osc = ac.createOscillator();
       const env = ac.createGain();
@@ -207,13 +246,13 @@ export function useBgm() {
   };
 
   /* ── 스네어 (마디 2·4박 = 매 2박자, 1박 오프셋) ── */
-  const scheduleSnare = (t0: number) => {
+  const scheduleSnare = (t0: number, loopBeats = LOOP_BEATS, beat = BEAT) => {
     const ac   = getCtx();
     const out  = getGain();
     const buf  = getNoise();
-    const count = LOOP_BEATS / 2; // 16 스네어
+    const count = loopBeats / 2;
     for (let i = 0; i < count; i++) {
-      const t = t0 + BEAT + i * 2 * BEAT; // 1박 오프셋
+      const t = t0 + beat + i * 2 * beat;
       // 노이즈
       const src = ac.createBufferSource();
       src.buffer = buf;
@@ -239,12 +278,12 @@ export function useBgm() {
   };
 
   /* ── 하이햇 (8분음표, 박자 강조) ── */
-  const scheduleHats = (t0: number) => {
+  const scheduleHats = (t0: number, loopDur = LOOP_DUR, beat = BEAT) => {
     const ac   = getCtx();
     const out  = getGain();
     const buf  = getNoise();
-    const step  = BEAT * 0.5;
-    const count = Math.round(LOOP_DUR / step);
+    const step  = beat * 0.5;
+    const count = Math.round(loopDur / step);
     for (let i = 0; i < count; i++) {
       const t    = t0 + i * step;
       const isOn = i % 2 === 0;
@@ -263,23 +302,25 @@ export function useBgm() {
 
   /* ── 1루프 전체 스케줄 ── */
   const scheduleLoop = (t0: number) => {
-    scheduleMelody(t0);
-    scheduleBass(t0);
-    schedulePads(t0);
-    scheduleKick(t0);
-    scheduleSnare(t0);
-    scheduleHats(t0);
+    if (trackRef.current === 0) {
+      scheduleMelody(t0); scheduleBass(t0); schedulePads(t0);
+      scheduleKick(t0);   scheduleSnare(t0); scheduleHats(t0);
+    } else {
+      scheduleMelody(t0, MELODY_B, BEAT_B); scheduleBass(t0, BASS_B, BEAT_B); schedulePads(t0, PADS_B, BEAT_B);
+      scheduleKick(t0, LOOP_BEATS_B, BEAT_B); scheduleSnare(t0, LOOP_BEATS_B, BEAT_B); scheduleHats(t0, LOOP_DUR_B, BEAT_B);
+    }
   };
 
   const tick = useCallback(() => {
     const ac = getCtx();
     while (nextTime.current < ac.currentTime + LOOKAHEAD) {
       scheduleLoop(nextTime.current);
-      nextTime.current += LOOP_DUR;
+      nextTime.current += trackRef.current === 0 ? LOOP_DUR : LOOP_DUR_B;
     }
   }, []); // eslint-disable-line
 
   const play = useCallback(() => {
+    isPlayingRef.current = true;
     const ac = getCtx();
     const g  = getGain();
     g.gain.cancelScheduledValues(ac.currentTime);
@@ -291,6 +332,7 @@ export function useBgm() {
   }, [tick]); // eslint-disable-line
 
   const stop = useCallback(() => {
+    isPlayingRef.current = false;
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (masterGain.current) {
       const ac = getCtx();
@@ -298,6 +340,16 @@ export function useBgm() {
       masterGain.current.gain.linearRampToValueAtTime(0, ac.currentTime + 0.5);
     }
   }, []);
+
+  const setTrack = useCallback((id: number) => {
+    if (trackRef.current === id) return;
+    trackRef.current = id;
+    if (!isPlayingRef.current) return;
+    if (timerRef.current) clearInterval(timerRef.current);
+    nextTime.current = getCtx().currentTime + 0.05;
+    timerRef.current = setInterval(tick, TICK_MS);
+    tick();
+  }, [tick]); // eslint-disable-line
 
   const setVolume = useCallback((vol: number) => {
     volRef.current = vol;
@@ -307,5 +359,5 @@ export function useBgm() {
     }
   }, []);
 
-  return { play, stop, setVolume };
+  return { play, stop, setVolume, setTrack };
 }

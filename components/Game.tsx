@@ -66,6 +66,7 @@ export default function Game() {
   const [comboCount,    setComboCount]    = useState(0);
   const [bgmVol,        setBgmVol]        = useState(55);
   const [sfxVol,        setSfxVol]        = useState(80);
+  const [bgmTrack,      setBgmTrack]      = useState(0);
   const [showSettings,  setShowSettings]  = useState(false);
   const [vibration,     setVibration]     = useState(true);
   const [showTimer,     setShowTimer]     = useState(true);
@@ -75,7 +76,7 @@ export default function Game() {
 
   /* ── 사운드 ── */
   const { playTick, playSuccess, playFail, playCombo, playGameOver, setVolume: setSfxVolume } = useSound();
-  const bgm = useBgm();
+  const { play: bgmPlay, stop: bgmStop, setVolume: bgmSetVolume, setTrack: bgmSetTrack } = useBgm();
 
   /* ── Refs ── */
   const dragging        = useRef(false);
@@ -111,11 +112,13 @@ export default function Game() {
     const st = localStorage.getItem("appleGame_showTimer");
     if (vb !== null) setVibration(vb === "1");
     if (st !== null) setShowTimer(st === "1");
+    const bt = localStorage.getItem("appleGame_bgmTrack");
+    if (bt !== null) setBgmTrack(Number(bt));
   }, []);
 
   /* ── 볼륨 동기화 ── */
   useEffect(() => {
-    bgm.setVolume(bgmVol / 100);
+    bgmSetVolume(bgmVol / 100);
     localStorage.setItem("appleGame_bgmVol", String(bgmVol));
   }, [bgmVol]); // eslint-disable-line
 
@@ -132,10 +135,15 @@ export default function Game() {
     localStorage.setItem("appleGame_showTimer", showTimer ? "1" : "0");
   }, [showTimer]);
 
+  useEffect(() => {
+    bgmSetTrack(bgmTrack);
+    localStorage.setItem("appleGame_bgmTrack", String(bgmTrack));
+  }, [bgmTrack]); // eslint-disable-line
+
   /* ── BGM 재생/정지 ── */
   useEffect(() => {
-    if (status === "playing") bgm.play();
-    else                      bgm.stop();
+    if (status === "playing") bgmPlay();
+    else                      bgmStop();
   }, [status]); // eslint-disable-line
 
   /* ── 타이머 ── */
@@ -538,6 +546,16 @@ export default function Game() {
             <div className="space-y-5">
               <SettingSlider icon="🎵" label="BGM 볼륨"   value={bgmVol} onChange={setBgmVol} />
               <SettingSlider icon="🔊" label="효과음 볼륨" value={sfxVol} onChange={setSfxVol} />
+              <SettingRow icon="🎶" label="BGM 트랙">
+                <div className="flex gap-1.5">
+                  {(["Upbeat", "Catchy"] as const).map((name, i) => (
+                    <button key={i} onClick={() => setBgmTrack(i)}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition-colors ${bgmTrack === i ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </SettingRow>
               <SettingRow icon="📳" label="진동">
                 <Toggle value={vibration} onChange={setVibration} />
               </SettingRow>
