@@ -396,18 +396,20 @@ export default function Game() {
             <Stat label="점수" value={String(score)}     className="text-orange-600" />
             <Stat label="최고" value={String(highScore)} className="text-purple-600" />
           </div>
-          {comboCount > 1 && (
-            <div className="text-center text-orange-500 font-black text-lg">🔥 {comboCount}x COMBO!</div>
-          )}
         </div>
       )}
 
       {/* 그리드 */}
       {status !== "idle" && (
-        <div
-          className={`bg-white/80 backdrop-blur p-2 rounded-2xl shadow-2xl border-2 border-orange-200 ${isShaking ? "animate-shake" : ""}`}
-          style={{ width: "min(100%, 336px)" }}
-          ref={gridDomRef}
+        <div className="relative" style={{ width: "min(100%, 336px)" }}>
+          {comboCount > 1 && (
+            <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+              <span className="text-orange-500 font-black text-3xl drop-shadow-lg">🔥 {comboCount}x COMBO!</span>
+            </div>
+          )}
+          <div
+            className={`bg-white/80 backdrop-blur p-2 rounded-2xl shadow-2xl border-2 border-orange-200 ${isShaking ? "animate-shake" : ""}`}
+            ref={gridDomRef}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
@@ -441,6 +443,7 @@ export default function Game() {
                 );
               })
             )}
+          </div>
           </div>
         </div>
       )}
