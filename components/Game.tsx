@@ -7,7 +7,7 @@ import { useBgm }   from "@/hooks/useBgm";
 /* ─────────────────── 상수 ─────────────────── */
 const ROWS = 9;
 const COLS = 7;
-const GAME_TIME = 120;
+const GAME_TIME = 60;
 
 // 제거 애니메이션 지속 시간 (ms) — tailwind pop-out 과 맞춤
 const REMOVE_MS  = 180;
@@ -272,6 +272,7 @@ export default function Game() {
         });
 
         setScore((s) => s + points);
+        setTimeLeft((t) => Math.min(t + sel.length * 0.3, GAME_TIME));
         setRemoving(new Set());
         setSelection([]);
 
@@ -448,7 +449,7 @@ export default function Game() {
             <RuleItem icon="👆" text="인접한 숫자를 드래그로 연결하세요" />
             <RuleItem icon="🎯" text={<>합이 <strong className="text-orange-500">10</strong>이 되면 제거 &amp; 점수!</>} />
             <RuleItem icon="🔥" text="연속 성공하면 콤보 보너스!" />
-            <RuleItem icon="⏱️" text="제한 시간: 120초" />
+            <RuleItem icon="⏱️" text="제한 시간: 60초 (블록 제거 시 +0.3초)" />
           </div>
           {highScore > 0 && <p className="text-purple-600 font-bold text-sm">최고 기록: {highScore}점</p>}
           <button
