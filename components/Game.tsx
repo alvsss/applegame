@@ -25,7 +25,13 @@ type GameStatus = "idle" | "playing" | "over";
 
 /* ─────────────────── 헬퍼 ─────────────────── */
 let cellIdSeq = 0;
-const mkCell   = (): Cell => ({ value: Math.floor(Math.random() * 9) + 1, id: cellIdSeq++, isNew: true });
+const randValue = (): number => {
+  const r = Math.random();
+  if (r < 0.5)  return Math.floor(Math.random() * 3) + 1; // 1~3 (50%)
+  if (r < 0.8)  return Math.floor(Math.random() * 3) + 4; // 4~6 (30%)
+  return Math.floor(Math.random() * 3) + 7;               // 7~9 (20%)
+};
+const mkCell   = (): Cell => ({ value: randValue(), id: cellIdSeq++, isNew: true });
 const keepCell = (c: Cell): Cell => c.isNew ? { ...c, isNew: false } : c;
 const initGrid = (): Cell[][] => Array.from({ length: ROWS }, () => Array.from({ length: COLS }, mkCell));
 
