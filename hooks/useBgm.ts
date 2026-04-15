@@ -343,9 +343,10 @@ export function useBgm() {
 
   const setTrack = useCallback((id: number) => {
     if (trackRef.current === id) return;
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (masterGain.current) { masterGain.current.disconnect(); masterGain.current = null; }
     trackRef.current = id;
     if (!isPlayingRef.current) return;
-    if (timerRef.current) clearInterval(timerRef.current);
     nextTime.current = getCtx().currentTime + 0.05;
     timerRef.current = setInterval(tick, TICK_MS);
     tick();
