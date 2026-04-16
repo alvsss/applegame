@@ -469,7 +469,7 @@ export default function Game() {
                     data-cell-id={cell.id}  // FLIP 애니메이션 식별자
                     className={[
                       "aspect-square rounded-xl flex items-center justify-center",
-                      "font-black text-white text-base cursor-pointer shadow-md",
+                      "cursor-pointer shadow-md",
                       cell.isNew ? "animate-pop-in" : "",
                       COLORS[cell.value],
                       isSelected
@@ -480,7 +480,12 @@ export default function Game() {
                     onMouseDown={(e) => { e.preventDefault(); onCellMouseDown(r, c); }}
                     onMouseEnter={() => onCellMouseEnter(r, c)}
                   >
-                    {cell.value}
+                    <img
+                      src={`/tiles/${cell.value}.png`}
+                      alt={String(cell.value)}
+                      draggable={false}
+                      style={{ width: "80%", height: "80%", objectFit: "contain", pointerEvents: "none", userSelect: "none" }}
+                    />
                   </div>
                 );
               })
